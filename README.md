@@ -1,5 +1,6 @@
 
 [ESP-IDF Programming Guide](http://esp-idf.readthedocs.io/en/latest/index.html)
+[iot bits](http://iot-bits.com/)
 [阿秀的学习笔记](http://blog.csdn.net/u012163234/article/category/6152301/1)  
 [燕十三的物联网之旅](http://blog.csdn.net/flyingcys/article/category/6095054)  
 [小韩同学的博客](http://blog.csdn.net/superhcq)  
