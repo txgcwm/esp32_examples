@@ -3,7 +3,7 @@
 # project subdirectory.
 #
 
-PROJECT_NAME := menuconfig
+PROJECT_NAME := httpclient
 
 include $(IDF_PATH)/make/project.mk
 
