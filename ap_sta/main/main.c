@@ -128,7 +128,7 @@ void app_main()
 {   
     // disable the default wifi logging
     esp_log_level_set("wifi", ESP_LOG_NONE);
-    
+
     nvs_flash_init();
 
     // create the event group to handle wifi events
