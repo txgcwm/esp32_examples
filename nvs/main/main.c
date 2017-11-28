@@ -18,21 +18,19 @@ nvs_handle my_handle;
 
 
 // parse command
-void parse_command(char* command) {
-	
+void parse_command(char* command)
+{	
 	// split the command and the arguments
 	char* token;
 	token = strtok(command, " ");
 	
-	if(!token) {
-		
+	if(!token) {	
 		printf("\nNo command provided!\n");
 		return;
 	}
 	
 	// ERASE command, erase all the partition content
 	if(strcmp(token, "erase") == 0) {
-	
 		printf("\nErasing all the VFS partition...");
 		fflush(stdout);
 		
@@ -53,8 +51,7 @@ void parse_command(char* command) {
 	else if(strcmp(token, "getint") == 0) {
 	
 		char* parameter = strtok(NULL, " ");
-		if(!parameter) {
-			
+		if(!parameter) {		
 			printf("\nNo key provided!\n");
 			return;
 		}
@@ -72,8 +69,7 @@ void parse_command(char* command) {
 	else if(strcmp(token, "getstring") == 0) {
 	
 		char* parameter = strtok(NULL, " ");
-		if(!parameter) {
-			
+		if(!parameter) {	
 			printf("\nNo key provided!\n");
 			return;
 		}
@@ -98,8 +94,7 @@ void parse_command(char* command) {
 	
 		char* parameter1 = strtok(NULL, " ");
 		char* parameter2 = strtok(NULL, " ");
-		if(!parameter1 || !parameter2) {
-			
+		if(!parameter1 || !parameter2) {		
 			printf("\nNo key or value provided!\n");
 			return;
 		}
@@ -119,7 +114,6 @@ void parse_command(char* command) {
 	
 	// SETSTRING command, store a string value with the given key
 	else if(strcmp(token, "setstring") == 0) {
-	
 		char* parameter1 = strtok(NULL, " ");
 		char* parameter2 = strtok(NULL, " ");
 		if(!parameter1 || !parameter2) {
@@ -144,10 +138,8 @@ void parse_command(char* command) {
 	else printf("\nUnknown command!\n");
 }
 
-
-// main task
-void main_task(void *pvParameter) {
-
+void main_task(void *pvParameter)
+{
 	// buffer to store the command	
 	char line[LINE_MAX];
 	int line_pos = 0;
@@ -158,7 +150,6 @@ void main_task(void *pvParameter) {
 	
 	// read the command from stdin
 	while(1) {
-	
 		int c = getchar();
 		
 		// nothing to read, give to RTOS the control
@@ -166,7 +157,11 @@ void main_task(void *pvParameter) {
 			vTaskDelay(10 / portTICK_PERIOD_MS);
 			continue;
 		}
-		if(c == '\r') continue;
+
+		if(c == '\r') {
+			continue;
+		}
+
 		if(c == '\n') {
 		
 			// terminate the string and parse the command
@@ -177,15 +172,13 @@ void main_task(void *pvParameter) {
 			line_pos = 0;
 			printf("\nesp32> ");
 			fflush(stdout);
-		}
-		else {
+		} else {
 			putchar(c);
 			line[line_pos] = c;
 			line_pos++;
 			
 			// buffer full!
-			if(line_pos == LINE_MAX) {
-				
+			if(line_pos == LINE_MAX) {		
 				printf("\nCommand buffer full!\n");
 				
 				// reset the buffer and print the prompt
@@ -197,10 +190,8 @@ void main_task(void *pvParameter) {
 	}
 }
 
-
-// Main application
-void app_main() {
-
+void app_main()
+{
 	printf("NVS Demo, esp32-tutorial\n\n");
 	
 	// initialize NVS flash
@@ -208,7 +199,6 @@ void app_main() {
 	
 	// if it is invalid, try to erase it
     if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
-		
 		printf("Got NO_FREE_PAGES error, trying to erase the partition...\n");
 		
 		// find the NVS partition
@@ -239,8 +229,7 @@ void app_main() {
 	
 	// open the partition in RW mode
 	err = nvs_open("storage", NVS_READWRITE, &my_handle);
-    if (err != ESP_OK) {
-		
+    if (err != ESP_OK) {	
 		printf("FATAL ERROR: Unable to open NVS\n");
 		while(1) vTaskDelay(10 / portTICK_PERIOD_MS);
 	}
@@ -248,4 +237,6 @@ void app_main() {
 	
 	// start the main task
 	xTaskCreate(&main_task, "main_task", 2048, NULL, 5, NULL);
+
+	return;
 }
