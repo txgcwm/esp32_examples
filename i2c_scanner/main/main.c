@@ -17,10 +17,9 @@ void loop_task(void *pvParameter)
     }
 }
 
-
 // Main application
-void app_main() {
-
+void app_main()
+{
 	printf("i2c scanner\r\n\r\n");
 
 	// configure the i2c controller 0 in master mode, normal speed
@@ -42,7 +41,6 @@ void app_main() {
 	int devices_found = 0;
 	
 	for(int address = 1; address < 127; address++) {
-	
 		// create and execute the command link
 		i2c_cmd_handle_t cmd = i2c_cmd_link_create();
 		i2c_master_start(cmd);
@@ -54,10 +52,15 @@ void app_main() {
 		}
 		i2c_cmd_link_delete(cmd);
 	}
-	if(devices_found == 0) printf("\r\n-> no devices found\r\n");
-	printf("\r\n...scan completed!\r\n");
 
+	if(devices_found == 0) {
+		printf("\r\n-> no devices found\r\n");
+	}
+
+	printf("\r\n...scan completed!\r\n");
 	
 	// start the loop task
 	xTaskCreate(&loop_task, "loop_task", 2048, NULL, 5, NULL);
+
+	return;
 }

@@ -41,8 +41,7 @@ bool relay_status;
 // Wifi event handler
 static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
-    switch(event->event_id) {
-		
+    switch(event->event_id) {	
     case SYSTEM_EVENT_STA_START:
         esp_wifi_connect();
         break;
@@ -57,13 +56,13 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
     
 	default:
         break;
-    }  
+    }
+
 	return ESP_OK;
 }
-
-	  
-static void http_server_netconn_serve(struct netconn *conn) {
-
+  
+static void http_server_netconn_serve(struct netconn *conn)
+{
 	struct netbuf *inbuf;
 	char *buf;
 	u16_t buflen;
@@ -71,15 +70,13 @@ static void http_server_netconn_serve(struct netconn *conn) {
 
 	err = netconn_recv(conn, &inbuf);
 
-	if (err == ERR_OK) {
-	  
+	if (err == ERR_OK) { 
 		netbuf_data(inbuf, (void**)&buf, &buflen);
 		
 		// extract the first line, with the request
 		char *first_line = strtok(buf, "\n");
 		
-		if(first_line) {
-			
+		if(first_line) {		
 			// default page
 			if(strstr(first_line, "GET / ")) {
 				netconn_write(conn, http_html_hdr, sizeof(http_html_hdr) - 1, NETCONN_NOCOPY);
@@ -91,10 +88,7 @@ static void http_server_netconn_serve(struct netconn *conn) {
 					printf("Sending default page, relay is OFF\n");
 					netconn_write(conn, http_off_hml, sizeof(http_off_hml) - 1, NETCONN_NOCOPY);
 				}
-			}
-			
-			// ON page
-			else if(strstr(first_line, "GET /on.html ")) {
+			} else if(strstr(first_line, "GET /on.html ")) { // ON page
 				
 				if(relay_status == false) {			
 					printf("Turning relay ON\n");
@@ -105,10 +99,7 @@ static void http_server_netconn_serve(struct netconn *conn) {
 				printf("Sending OFF page...\n");
 				netconn_write(conn, http_html_hdr, sizeof(http_html_hdr) - 1, NETCONN_NOCOPY);
 				netconn_write(conn, http_on_hml, sizeof(http_on_hml) - 1, NETCONN_NOCOPY);
-			}			
-
-			// OFF page
-			else if(strstr(first_line, "GET /off.html ")) {
+			} else if(strstr(first_line, "GET /off.html ")) {  // OFF page
 				
 				if(relay_status == true) {			
 					printf("Turning relay OFF\n");
@@ -119,40 +110,38 @@ static void http_server_netconn_serve(struct netconn *conn) {
 				printf("Sending OFF page...\n");
 				netconn_write(conn, http_html_hdr, sizeof(http_html_hdr) - 1, NETCONN_NOCOPY);
 				netconn_write(conn, http_off_hml, sizeof(http_off_hml) - 1, NETCONN_NOCOPY);
-			}
-			
-			// ON image
-			else if(strstr(first_line, "GET /on.png ")) {
+			} else if(strstr(first_line, "GET /on.png ")) {  // ON image
 				printf("Sending ON image...\n");
 				netconn_write(conn, http_png_hdr, sizeof(http_png_hdr) - 1, NETCONN_NOCOPY);
 				netconn_write(conn, on_png_start, on_png_end - on_png_start, NETCONN_NOCOPY);
-			}
-			
-			// OFF image
-			else if(strstr(first_line, "GET /off.png ")) {
+			} else if(strstr(first_line, "GET /off.png ")) { // OFF image
 				printf("Sending OFF image...\n");
 				netconn_write(conn, http_png_hdr, sizeof(http_png_hdr) - 1, NETCONN_NOCOPY);
 				netconn_write(conn, off_png_start, off_png_end - off_png_start, NETCONN_NOCOPY);
+			} else {
+				printf("Unkown request: %s\n", first_line);
 			}
-			
-			else printf("Unkown request: %s\n", first_line);
+		} else {
+			printf("Unkown request\n");
 		}
-		else printf("Unkown request\n");
 	}
 	
 	// close the connection and free the buffer
 	netconn_close(conn);
 	netbuf_delete(inbuf);
+
+	return;
 }
 
-static void http_server(void *pvParameters) {
-	
+static void http_server(void *pvParameters)
+{	
 	struct netconn *conn, *newconn;
 	err_t err;
 	conn = netconn_new(NETCONN_TCP);
 	netconn_bind(conn, NULL, 80);
 	netconn_listen(conn);
 	printf("HTTP Server listening...\n");
+
 	do {
 		err = netconn_accept(conn, &newconn);
 		printf("New client connected\n");
@@ -162,11 +151,11 @@ static void http_server(void *pvParameters) {
 		}
 		vTaskDelay(1); //allows task to be pre-empted
 	} while(err == ERR_OK);
+
 	netconn_close(conn);
 	netconn_delete(conn);
 	printf("\n");
 }
-
 
 // setup and start the wifi connection
 void wifi_setup() {
@@ -190,12 +179,13 @@ void wifi_setup() {
     };
 	ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
+
+    return;
 }
 
-
 // configure the output PIN
-void gpio_setup() {
-	
+void gpio_setup()
+{	
 	// configure the relay pin as GPIO, output
 	gpio_pad_select_gpio(CONFIG_RELAY_PIN);
     gpio_set_direction(CONFIG_RELAY_PIN, GPIO_MODE_OUTPUT);
@@ -204,7 +194,6 @@ void gpio_setup() {
 	gpio_set_level(CONFIG_RELAY_PIN, 0);
 	relay_status = false;
 }
-
 
 // Main application
 void app_main()
@@ -237,4 +226,6 @@ void app_main()
 	
 	// start the HTTP Server task
     xTaskCreate(&http_server, "http_server", 2048, NULL, 5, NULL);
+
+    return;
 }

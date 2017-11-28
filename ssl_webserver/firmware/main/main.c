@@ -70,17 +70,17 @@ bool relay_status;
 
 
 // mbedTLS debug function
-void my_mbedtls_debug(void *ctx, int level, const char *file, int line, const char *st) {
-		
+void my_mbedtls_debug(void *ctx, int level, const char *file, int line, const char *st)
+{		
 	printf("mbedtls: %s\n", st);
 }
 
 // mbedTLS write function with fragment and error management 
-int ssl_write(mbedtls_ssl_context *ssl, const unsigned char *buf, size_t len) {
-
+int ssl_write(mbedtls_ssl_context *ssl, const unsigned char *buf, size_t len)
+{
 	int ret;
+
 	do {
-	
 		ret = mbedtls_ssl_write(ssl, buf, len);
 		
 		// an error occurred? 
@@ -104,8 +104,7 @@ int ssl_write(mbedtls_ssl_context *ssl, const unsigned char *buf, size_t len) {
 // AP event handler
 static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
-    switch(event->event_id) {
-		
+    switch(event->event_id) {		
     case SYSTEM_EVENT_AP_START:
 		xEventGroupSetBits(event_group, AP_STARTED);
 		break;
@@ -124,10 +123,9 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
    
 	return ESP_OK;
 }
-
 	  
-static void https_serve(mbedtls_net_context *client_fd) {
-	
+static void https_serve(mbedtls_net_context *client_fd)
+{	
 	// return variable
 	int ret;
 	
@@ -247,9 +245,8 @@ static void https_serve(mbedtls_net_context *client_fd) {
 	printf("\n");
 }
 
-
-static void https_server(void *pvParameters) {
-	
+static void https_server(void *pvParameters)
+{	
 	// initialize mbedTLS components
 	mbedtls_net_init(&listen_fd);
 	mbedtls_net_init(&client_fd);
@@ -301,8 +298,8 @@ static void https_server(void *pvParameters) {
 
 
 // setup and start SoftAP
-void ap_setup() {
-	
+void ap_setup()
+{	
 	event_group = xEventGroupCreate();
 		
 	tcpip_adapter_init();
@@ -345,10 +342,9 @@ void ap_setup() {
 	ESP_ERROR_CHECK(esp_wifi_start());
 }
 
-
 // configure the output PIN
-void gpio_setup() {
-	
+void gpio_setup()
+{	
 	// configure the relay pin as GPIO, output
 	gpio_pad_select_gpio(CONFIG_RELAY_PIN);
     gpio_set_direction(CONFIG_RELAY_PIN, GPIO_MODE_OUTPUT);
@@ -357,7 +353,6 @@ void gpio_setup() {
 	gpio_set_level(CONFIG_RELAY_PIN, 0);
 	relay_status = false;
 }
-
 
 // Main application
 void app_main()
@@ -378,4 +373,6 @@ void app_main()
 	
 	// start the HTTPS Server task
     xTaskCreate(&https_server, "https_server", 10000, NULL, 5, NULL);
+
+    return;
 }
