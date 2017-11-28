@@ -11,6 +11,7 @@
 [esp32-tutorial](https://github.com/lucadentella/esp32-tutorial)  
 [ESP32 好玩、有趣、实用的项目](https://github.com/tidyjiang8/esp32-projects)  
 [Secure over-the-air updates for the ESP32 platform](https://github.com/classycodeoss/esp32-ota-https)  
+[esp32-ota](https://github.com/classycodeoss/esp32-ota)  
 [Demo for working with a camera on ESP32](https://github.com/igrr/esp32-cam-demo)  
 [Lua RTOS for ESP32](https://github.com/whitecatboard/Lua-RTOS-ESP32)  
 [Demo project for alink, include embed and SDS](https://github.com/espressif/esp32-alink-demo)  
