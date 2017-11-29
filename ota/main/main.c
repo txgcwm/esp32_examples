@@ -1,13 +1,5 @@
-/* OTA example
-
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
-#include <string.h>
 #include <sys/socket.h>
+#include <string.h>
 #include <netdb.h>
 
 #include "freertos/FreeRTOS.h"
@@ -24,13 +16,13 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
-#define EXAMPLE_WIFI_SSID CONFIG_WIFI_SSID
-#define EXAMPLE_WIFI_PASS CONFIG_WIFI_PASSWORD
+#define EXAMPLE_WIFI_SSID   CONFIG_WIFI_SSID
+#define EXAMPLE_WIFI_PASS   CONFIG_WIFI_PASSWORD
 #define EXAMPLE_SERVER_IP   CONFIG_SERVER_IP
 #define EXAMPLE_SERVER_PORT CONFIG_SERVER_PORT
-#define EXAMPLE_FILENAME CONFIG_EXAMPLE_FILENAME
-#define BUFFSIZE 1024
-#define TEXT_BUFFSIZE 1024
+#define EXAMPLE_FILENAME    CONFIG_EXAMPLE_FILENAME
+#define BUFFSIZE            1024
+#define TEXT_BUFFSIZE       1024
 
 static const char *TAG = "ota";
 /*an ota data write buffer ready to write to the flash*/
@@ -69,6 +61,7 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
     default:
         break;
     }
+
     return ESP_OK;
 }
 
@@ -100,6 +93,7 @@ static int read_until(char *buffer, char delim, int len)
     while (buffer[i] != delim && i < len) {
         ++i;
     }
+
     return i + 1;
 }
 
@@ -111,6 +105,7 @@ static bool read_past_http_header(char text[], int total_len, esp_ota_handle_t u
 {
     /* i means current position */
     int i = 0, i_read_len = 0;
+
     while (text[i] != 0 && i < total_len) {
         i_read_len = read_until(&text[i], '\n', total_len);
         // if we resolve \r\n line,we think packet header is finished
@@ -132,6 +127,7 @@ static bool read_past_http_header(char text[], int total_len, esp_ota_handle_t u
         }
         i += i_read_len;
     }
+
     return false;
 }
 
@@ -149,6 +145,9 @@ static bool connect_to_http_server()
         return false;
     }
 
+    struct timeval timeout = {3, 0};//3s
+    setsockopt(socket_id, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+
     // set connect info
     memset(&sock_info, 0, sizeof(struct sockaddr_in));
     sock_info.sin_family = AF_INET;
@@ -165,6 +164,7 @@ static bool connect_to_http_server()
         ESP_LOGI(TAG, "Connected to server");
         return true;
     }
+
     return false;
 }
 
@@ -240,7 +240,11 @@ static void ota_example_task(void *pvParameter)
         int buff_len = recv(socket_id, text, TEXT_BUFFSIZE, 0);
         if (buff_len < 0) { /*receive error*/
             ESP_LOGE(TAG, "Error: receive data error! errno=%d", errno);
-            task_fatal_error();
+            if(errno == EAGAIN) {
+                flag = false;
+            } else {
+                task_fatal_error();
+            }
         } else if (buff_len > 0 && !resp_body_start) { /*deal with response header*/
             memcpy(ota_write_data, text, buff_len);
             resp_body_start = read_past_http_header(text, buff_len, update_handle);
@@ -273,8 +277,10 @@ static void ota_example_task(void *pvParameter)
         ESP_LOGE(TAG, "esp_ota_set_boot_partition failed! err=0x%x", err);
         task_fatal_error();
     }
+
     ESP_LOGI(TAG, "Prepare to restart system!");
     esp_restart();
+
     return ;
 }
 
@@ -296,4 +302,6 @@ void app_main()
 
     initialise_wifi();
     xTaskCreate(&ota_example_task, "ota_example_task", 8192, NULL, 5, NULL);
+
+    return;
 }
