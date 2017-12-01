@@ -10,7 +10,9 @@
 #include "esp_log.h"
 #include "esp_smartconfig.h"
 #include "esp_system.h"
-
+#include "esp_partition.h"
+#include "esp_err.h"
+#include "nvs.h"
 #include "nvs_flash.h"
 #include "driver/gpio.h"
 
@@ -20,8 +22,10 @@
 #define ESP_INTR_FLAG_DEFAULT 0
 #define TAG	"app_main"
 
-// Event group for inter-task communication
-static EventGroupHandle_t event_group;
+
+static EventGroupHandle_t event_group;  // Event group for inter-task communication
+nvs_handle wifi_handle;  // NVS handler
+bool smartconfig = false;
 const int WIFI_CONNECTED_BIT = BIT0;
 const int BUTTON_PRESSED_BIT = BIT1;
 
@@ -36,11 +40,16 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
     switch(event->event_id) {		
     case SYSTEM_EVENT_STA_START:
-    	xEventGroupWaitBits(event_group, WIFI_CONNECTED_BIT, false, true, portMAX_DELAY);
+    	// if(smartconfig) {
+    		// xEventGroupWaitBits(event_group, WIFI_CONNECTED_BIT, false, true, portMAX_DELAY);
+      //   	smartconfig = false;
+        // }
+    	printf("%s, %d ~~~~~~~~~~~~~~~~\n", __FUNCTION__, __LINE__);
         esp_wifi_connect();
         break;
     
 	case SYSTEM_EVENT_STA_GOT_IP:
+		printf("%s, %d ~~~~~~~~~~~~~~~~\n", __FUNCTION__, __LINE__);
         xEventGroupSetBits(event_group, WIFI_CONNECTED_BIT);
         break;
     
@@ -53,6 +62,62 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
     }
 
 	return ESP_OK;
+}
+
+esp_err_t miot_nvs_save_ssid_passwd(char* ssid, char* passwd)
+{
+	printf("ssid(%s), passwd(%s)\n", ssid, passwd);
+
+	esp_err_t err = nvs_set_str(wifi_handle, "ssid", ssid);
+	if(err != ESP_OK) {
+		printf("Error in nvs_set_str ssid! (%04X)\n", err);
+		return err;
+	}
+
+	err = nvs_commit(wifi_handle);
+	if(err != ESP_OK) {
+		printf("\nError in commit! (%04X)\n", err);
+		return err;
+	}
+
+	err = nvs_set_str(wifi_handle, "passwd", passwd);
+	if(err != ESP_OK) {
+		printf("\nError in nvs_set_str passwd! (%04X)\n", err);
+		return err;
+	}
+
+	err = nvs_commit(wifi_handle);
+	if(err != ESP_OK) {
+		printf("\nError in commit! (%04X)\n", err);
+		return err;
+	}
+
+	return err;
+}
+
+esp_err_t miot_nvs_read_ssid_passwd(char* ssid, size_t* ssid_size, char* passwd, size_t* passwd_size)
+{
+	esp_err_t err = nvs_get_str(wifi_handle, "ssid", ssid, ssid_size);
+	if(err != ESP_OK) {
+		if(err == ESP_ERR_NVS_NOT_FOUND) {
+			printf("Key not found\n");
+		}
+
+		printf("Error in nvs_get_str to get string! (%04X)\n", err);
+		return err;
+	}
+
+	err = nvs_get_str(wifi_handle, "passwd", passwd, passwd_size);
+	if(err != ESP_OK) {
+		if(err == ESP_ERR_NVS_NOT_FOUND) {
+			printf("Key not found\n");
+		}
+
+		printf("Error in nvs_get_str to get string! (%04X)\n", err);
+		return err;
+	}
+
+	return err;
 }
 
 static void smartconfig_handler(smartconfig_status_t status, void *pdata)
@@ -82,6 +147,8 @@ static void smartconfig_handler(smartconfig_status_t status, void *pdata)
 		wifi_config.sta = *((wifi_sta_config_t *)pdata);
 		esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
 
+		miot_nvs_save_ssid_passwd((char *)wifi_config.sta.ssid, (char *)wifi_config.sta.password);
+
 		esp_wifi_disconnect();
         xEventGroupSetBits(event_group, WIFI_CONNECTED_BIT);
 		//esp_wifi_connect();
@@ -90,14 +157,13 @@ static void smartconfig_handler(smartconfig_status_t status, void *pdata)
 	case SC_STATUS_LINK_OVER:
 		ESP_LOGI(TAG, "SC_STATUS_LINK_OVER");
 		if (pdata != NULL) {
-			uint8_t phone_ip[4] = { 0 };
+			uint8_t phone_ip[4] = {0};
 
 			memcpy(phone_ip, (uint8_t *) pdata, 4);
 			ESP_LOGI(TAG, "Phone ip: %d.%d.%d.%d", phone_ip[0],
 			       phone_ip[1], phone_ip[2], phone_ip[3]);
 		}
 		esp_smartconfig_stop();
-        // xEventGroupSetBits(event_group, CONNECTED_BIT);
 		break;
 	}
 
@@ -106,13 +172,11 @@ static void smartconfig_handler(smartconfig_status_t status, void *pdata)
 
 void smartconfig_init()
 {
-	tcpip_adapter_init();
-	ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
 	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
 	ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 	ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
 	ESP_ERROR_CHECK(esp_wifi_start());
-
+	smartconfig = true;
     ESP_ERROR_CHECK(esp_smartconfig_set_type(SC_TYPE_ESPTOUCH_AIRKISS));
 	ESP_ERROR_CHECK(esp_smartconfig_start(smartconfig_handler));
 }
@@ -130,41 +194,88 @@ void button_setup()
 }
 
 void wifi_setup()
-{	
-	tcpip_adapter_init();
-
-	ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
-
+{
 	wifi_init_config_t wifi_init_config = WIFI_INIT_CONFIG_DEFAULT();
 	ESP_ERROR_CHECK(esp_wifi_init(&wifi_init_config));
 	ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
 	ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
 
-	wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = CONFIG_WIFI_SSID,
-            .password = CONFIG_WIFI_PASSWORD,
-        },
-    };
-	ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
+	size_t ssid_size = 30;
+	char ssid[30] = {0};
+	size_t passwd_size = 60;
+	char passwd[60] = {0};
+
+	esp_err_t err = miot_nvs_read_ssid_passwd(ssid, &ssid_size, passwd, &passwd_size);
+	if(err == ESP_OK) {
+		wifi_config_t wifi_config = {0};
+
+		printf("ssid(%s), passwd(%s)\n", ssid, passwd);
+
+		memcpy(wifi_config.sta.ssid, ssid, ssid_size);
+		memcpy(wifi_config.sta.password, passwd, passwd_size);
+
+		ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
+	    ESP_ERROR_CHECK(esp_wifi_start());
+	}
 
     return;
+}
+
+esp_err_t miot_nvs_init()
+{
+	esp_err_t err = nvs_flash_init();  // initialize NVS flash
+	
+	// if it is invalid, try to erase it
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
+		printf("Got NO_FREE_PAGES error, trying to erase the partition...\n");
+		
+		// find the NVS partition
+        const esp_partition_t* nvs_partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NULL);      
+		if(!nvs_partition) {
+			printf("FATAL ERROR: No NVS partition found\n");
+		}
+		
+		// erase the partition
+        err = (esp_partition_erase_range(nvs_partition, 0, nvs_partition->size));
+		if(err != ESP_OK) {
+			printf("FATAL ERROR: Unable to erase the partition\n");
+		}
+		printf("Partition erased!\n");
+		
+		// now try to initialize it again
+		err = nvs_flash_init();
+		if(err != ESP_OK) {
+			printf("FATAL ERROR: Unable to initialize NVS\n");
+		}
+	}
+
+	return err;
 }
 
 void main_task(void *pvParameter)
 {
 	for(;;) {
 		// waiting for button press
-		xEventGroupWaitBits(event_group, BUTTON_PRESSED_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
-		printf("Button pressed, sending SMS...\n");
+		// xEventGroupWaitBits(event_group, BUTTON_PRESSED_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
+		// printf("Button pressed...\n");
 
-		smartconfig_init();
+		// smartconfig_init();
 
 		// wait for connection
 		printf("Waiting for connection to the wifi network...\n ");
 		xEventGroupWaitBits(event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
-		printf("Connected to %s\n\n", CONFIG_WIFI_SSID);
+		printf("Connected...\n\n");
+
+		// print the local IP address
+		tcpip_adapter_ip_info_t ip_info;
+		ESP_ERROR_CHECK(tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ip_info));
+		printf("IP Address:  %s\n", ip4addr_ntoa(&ip_info.ip));
+		printf("Subnet mask: %s\n", ip4addr_ntoa(&ip_info.netmask));
+		printf("Gateway:     %s\n", ip4addr_ntoa(&ip_info.gw));
+
+		while(1) {
+			vTaskDelay(1000 / portTICK_RATE_MS);
+		}
 	}
 
 	return;
@@ -173,13 +284,23 @@ void main_task(void *pvParameter)
 void app_main()
 {
 	printf("Application started\n\n");
-	
-	nvs_flash_init();
 
 	event_group = xEventGroupCreate();
 
-	// wifi_setup();
+	miot_nvs_init();
+	tcpip_adapter_init();
+
+	ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
+
+	// open the partition in RW mode
+	esp_err_t err = nvs_open("storage", NVS_READWRITE, &wifi_handle);
+    if (err != ESP_OK) {
+		printf("FATAL ERROR: Unable to open NVS\n");
+	}
+	printf("NVS open OK\n");
+
 	button_setup();
+	wifi_setup();
 
     xTaskCreate(&main_task, "main_task", 2048, NULL, 5, NULL);
 
