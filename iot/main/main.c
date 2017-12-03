@@ -20,6 +20,8 @@
 #include "lwip/sockets.h"
 #include "apps/sntp/sntp.h"
 
+#define DR_REG_RNG_BASE   0x3ff75144
+
 #define ESP_INTR_FLAG_DEFAULT 0
 #define TAG	"app_main"
 
@@ -315,6 +317,10 @@ void main_task(void *pvParameter)
 
 		while(1) {
 			vTaskDelay(1000 / portTICK_RATE_MS);
+
+			// get a new random number and print it
+			uint32_t randomNumber = READ_PERI_REG(DR_REG_RNG_BASE);
+			printf("New random number: %u\n", randomNumber);
 		}
 	}
 
