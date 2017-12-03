@@ -29,39 +29,35 @@ bool smartconfig = false;
 const int WIFI_CONNECTED_BIT = BIT0;
 const int BUTTON_PRESSED_BIT = BIT1;
 
-void IRAM_ATTR button_isr_handler(void* arg)
-{	
-	xEventGroupSetBitsFromISR(event_group, BUTTON_PRESSED_BIT, NULL);
-
-	return;
-}
-
-static esp_err_t event_handler(void *ctx, system_event_t *event)
+esp_err_t miot_nvs_init()
 {
-    switch(event->event_id) {		
-    case SYSTEM_EVENT_STA_START:
-    	// if(smartconfig) {
-    		// xEventGroupWaitBits(event_group, WIFI_CONNECTED_BIT, false, true, portMAX_DELAY);
-      //   	smartconfig = false;
-        // }
-    	printf("%s, %d ~~~~~~~~~~~~~~~~\n", __FUNCTION__, __LINE__);
-        esp_wifi_connect();
-        break;
-    
-	case SYSTEM_EVENT_STA_GOT_IP:
-		printf("%s, %d ~~~~~~~~~~~~~~~~\n", __FUNCTION__, __LINE__);
-        xEventGroupSetBits(event_group, WIFI_CONNECTED_BIT);
-        break;
-    
-	case SYSTEM_EVENT_STA_DISCONNECTED:
-		xEventGroupClearBits(event_group, WIFI_CONNECTED_BIT);
-        break;
-    
-	default:
-        break;
-    }
+	esp_err_t err = nvs_flash_init();  // initialize NVS flash
+	
+	// if it is invalid, try to erase it
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
+		printf("Got NO_FREE_PAGES error, trying to erase the partition...\n");
+		
+		// find the NVS partition
+        const esp_partition_t* nvs_partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NULL);      
+		if(!nvs_partition) {
+			printf("FATAL ERROR: No NVS partition found\n");
+		}
+		
+		// erase the partition
+        err = (esp_partition_erase_range(nvs_partition, 0, nvs_partition->size));
+		if(err != ESP_OK) {
+			printf("FATAL ERROR: Unable to erase the partition\n");
+		}
+		printf("Partition erased!\n");
+		
+		// now try to initialize it again
+		err = nvs_flash_init();
+		if(err != ESP_OK) {
+			printf("FATAL ERROR: Unable to initialize NVS\n");
+		}
+	}
 
-	return ESP_OK;
+	return err;
 }
 
 esp_err_t miot_nvs_save_ssid_passwd(char* ssid, char* passwd)
@@ -120,6 +116,37 @@ esp_err_t miot_nvs_read_ssid_passwd(char* ssid, size_t* ssid_size, char* passwd,
 	return err;
 }
 
+void IRAM_ATTR button_isr_handler(void* arg)
+{	
+	xEventGroupSetBitsFromISR(event_group, BUTTON_PRESSED_BIT, NULL);
+
+	return;
+}
+
+static esp_err_t event_handler(void *ctx, system_event_t *event)
+{
+    switch(event->event_id) {		
+    case SYSTEM_EVENT_STA_START:
+    	printf("%s, %d ~~~~~~~~~~~~~~~~\n", __FUNCTION__, __LINE__);
+        esp_wifi_connect();
+        break;
+    
+	case SYSTEM_EVENT_STA_GOT_IP:
+		printf("%s, %d ~~~~~~~~~~~~~~~~\n", __FUNCTION__, __LINE__);
+        xEventGroupSetBits(event_group, WIFI_CONNECTED_BIT);
+        break;
+    
+	case SYSTEM_EVENT_STA_DISCONNECTED:
+		xEventGroupClearBits(event_group, WIFI_CONNECTED_BIT);
+        break;
+    
+	default:
+        break;
+    }
+
+	return ESP_OK;
+}
+
 static void smartconfig_handler(smartconfig_status_t status, void *pdata)
 {
 	switch (status) {
@@ -136,7 +163,7 @@ static void smartconfig_handler(smartconfig_status_t status, void *pdata)
 		smartconfig_type_t *type = pdata;
 		if (*type == SC_TYPE_ESPTOUCH) {
 			ESP_LOGI(TAG, "SC_TYPE:SC_TYPE_ESPTOUCH");
-		} else {
+		} else if (*type == SC_TYPE_ESPTOUCH_AIRKISS) {
 			ESP_LOGI(TAG, "SC_TYPE:SC_TYPE_AIRKISS");
 		}
 		break;
@@ -150,8 +177,8 @@ static void smartconfig_handler(smartconfig_status_t status, void *pdata)
 		miot_nvs_save_ssid_passwd((char *)wifi_config.sta.ssid, (char *)wifi_config.sta.password);
 
 		esp_wifi_disconnect();
-        xEventGroupSetBits(event_group, WIFI_CONNECTED_BIT);
-		//esp_wifi_connect();
+        vTaskDelay(1000 / portTICK_RATE_MS);
+		esp_wifi_connect();
 		break;
 
 	case SC_STATUS_LINK_OVER:
@@ -221,50 +248,19 @@ void wifi_setup()
     return;
 }
 
-esp_err_t miot_nvs_init()
-{
-	esp_err_t err = nvs_flash_init();  // initialize NVS flash
-	
-	// if it is invalid, try to erase it
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
-		printf("Got NO_FREE_PAGES error, trying to erase the partition...\n");
-		
-		// find the NVS partition
-        const esp_partition_t* nvs_partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NULL);      
-		if(!nvs_partition) {
-			printf("FATAL ERROR: No NVS partition found\n");
-		}
-		
-		// erase the partition
-        err = (esp_partition_erase_range(nvs_partition, 0, nvs_partition->size));
-		if(err != ESP_OK) {
-			printf("FATAL ERROR: Unable to erase the partition\n");
-		}
-		printf("Partition erased!\n");
-		
-		// now try to initialize it again
-		err = nvs_flash_init();
-		if(err != ESP_OK) {
-			printf("FATAL ERROR: Unable to initialize NVS\n");
-		}
-	}
-
-	return err;
-}
-
 void main_task(void *pvParameter)
 {
 	for(;;) {
 		// waiting for button press
-		// xEventGroupWaitBits(event_group, BUTTON_PRESSED_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
-		// printf("Button pressed...\n");
+		xEventGroupWaitBits(event_group, BUTTON_PRESSED_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
+		printf("Button pressed...\n");
 
-		// smartconfig_init();
+		smartconfig_init();
 
 		// wait for connection
 		printf("Waiting for connection to the wifi network...\n ");
 		xEventGroupWaitBits(event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
-		printf("Connected...\n\n");
+		printf("Connected...\n");
 
 		// print the local IP address
 		tcpip_adapter_ip_info_t ip_info;
