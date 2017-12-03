@@ -18,6 +18,7 @@
 
 #include "lwip/netdb.h"
 #include "lwip/sockets.h"
+#include "apps/sntp/sntp.h"
 
 #define ESP_INTR_FLAG_DEFAULT 0
 #define TAG	"app_main"
@@ -25,7 +26,6 @@
 
 static EventGroupHandle_t event_group;  // Event group for inter-task communication
 nvs_handle wifi_handle;  // NVS handler
-bool smartconfig = false;
 const int WIFI_CONNECTED_BIT = BIT0;
 const int BUTTON_PRESSED_BIT = BIT1;
 
@@ -130,16 +130,16 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
     	printf("%s, %d ~~~~~~~~~~~~~~~~\n", __FUNCTION__, __LINE__);
         esp_wifi_connect();
         break;
-    
+
 	case SYSTEM_EVENT_STA_GOT_IP:
 		printf("%s, %d ~~~~~~~~~~~~~~~~\n", __FUNCTION__, __LINE__);
         xEventGroupSetBits(event_group, WIFI_CONNECTED_BIT);
         break;
-    
+
 	case SYSTEM_EVENT_STA_DISCONNECTED:
 		xEventGroupClearBits(event_group, WIFI_CONNECTED_BIT);
         break;
-    
+
 	default:
         break;
     }
@@ -203,7 +203,6 @@ void smartconfig_init()
 	ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 	ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
 	ESP_ERROR_CHECK(esp_wifi_start());
-	smartconfig = true;
     ESP_ERROR_CHECK(esp_smartconfig_set_type(SC_TYPE_ESPTOUCH_AIRKISS));
 	ESP_ERROR_CHECK(esp_smartconfig_start(smartconfig_handler));
 }
@@ -248,6 +247,49 @@ void wifi_setup()
     return;
 }
 
+void miot_sntp_gettime()
+{
+	// initialize the SNTP service
+	sntp_setoperatingmode(SNTP_OPMODE_POLL);
+	sntp_setservername(0, CONFIG_SNTP_SERVER);
+	sntp_init();
+	
+	// wait for the service to set the time
+	time_t now;
+	struct tm timeinfo;
+	time(&now);
+	localtime_r(&now, &timeinfo);
+
+	while(timeinfo.tm_year < (2016 - 1900)) {
+		printf("Time not set, waiting...\n");
+		vTaskDelay(5000 / portTICK_PERIOD_MS);
+		time(&now);
+        localtime_r(&now, &timeinfo);
+	}
+	
+	// print the actual time with different formats
+	char buffer[100];
+	printf("Actual UTC time:\n");
+	strftime(buffer, sizeof(buffer), "%d/%m/%Y %H:%M:%S", &timeinfo);
+	printf("- %s\n", buffer);
+	strftime(buffer, sizeof(buffer), "%A, %d %B %Y", &timeinfo);
+	printf("- %s\n", buffer);
+	strftime(buffer, sizeof(buffer), "Today is day %j of year %Y", &timeinfo);
+	printf("- %s\n", buffer);
+	printf("\n");
+
+	// change the timezone to Italy
+	// setenv("TZ", "CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00", 1);
+	setenv("TZ", "GMT-8", 1);
+	tzset();
+
+	localtime_r(&now, &timeinfo);
+	strftime(buffer, sizeof(buffer), "%d/%m/%Y %H:%M:%S", &timeinfo);
+	printf("Actual time: %s\n", buffer);
+
+	return;
+}
+
 void main_task(void *pvParameter)
 {
 	for(;;) {
@@ -268,6 +310,8 @@ void main_task(void *pvParameter)
 		printf("IP Address:  %s\n", ip4addr_ntoa(&ip_info.ip));
 		printf("Subnet mask: %s\n", ip4addr_ntoa(&ip_info.netmask));
 		printf("Gateway:     %s\n", ip4addr_ntoa(&ip_info.gw));
+
+		miot_sntp_gettime();
 
 		while(1) {
 			vTaskDelay(1000 / portTICK_RATE_MS);
