@@ -20,6 +20,8 @@
 #include "lwip/sockets.h"
 #include "apps/sntp/sntp.h"
 
+#include "ota.h"
+
 #define DR_REG_RNG_BASE   0x3ff75144
 
 #define ESP_INTR_FLAG_DEFAULT 0
@@ -314,6 +316,8 @@ void main_task(void *pvParameter)
 		printf("Gateway:     %s\n", ip4addr_ntoa(&ip_info.gw));
 
 		miot_sntp_gettime();
+
+		xTaskCreate(&miot_ota_task, "ota_task", 8192, NULL, 5, NULL);
 
 		while(1) {
 			vTaskDelay(1000 / portTICK_RATE_MS);
