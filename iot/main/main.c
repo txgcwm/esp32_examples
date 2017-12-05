@@ -16,6 +16,10 @@
 #include "nvs_flash.h"
 #include "driver/gpio.h"
 
+// VFS and SPIFFS includes
+#include "esp_vfs.h"
+#include "spiffs_vfs.h"
+
 #include "lwip/netdb.h"
 #include "lwip/sockets.h"
 #include "apps/sntp/sntp.h"
@@ -348,6 +352,15 @@ void app_main()
 		printf("FATAL ERROR: Unable to open NVS\n");
 	}
 	printf("NVS open OK\n");
+
+	vfs_spiffs_register();  // register SPIFFS with VFS
+	
+	// the partition was mounted?
+	if(spiffs_is_mounted) {	
+		printf("Partition correctly mounted!\r\n");
+	} else {
+		printf("Error while mounting the SPIFFS partition");
+	}
 
 	button_setup();
 	wifi_setup();
